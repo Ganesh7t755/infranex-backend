@@ -1,0 +1,20 @@
+# Tests & Verification
+tests/
+run_stage4_e2e_verification.py
+
+# Large Datasets & AI Model Weights
+models/
+training_data/
+
+# Local databases, uploads, and backups
+backups/
+uploads/
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+
+# Documentation & Tool Caches
+*.md
+.pytest_cache/
+.mypy_cache/

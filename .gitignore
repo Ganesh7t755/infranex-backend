@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Caches and test artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Local databases, backups, and dumps
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+/backups/
+
+# User evidence and generated uploads
+/uploads/
+
+# AI model weights, caches, and training datasets
+/models/
+/training_data/
+
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Deployment, IDE, and tool caches
+.vercel/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+*.log

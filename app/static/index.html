@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InfraNex AI — Civic Infrastructure Repair Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+        :root {
+            --bg-deep: #080C14;
+            --bg-surface: #0E1626;
+            --bg-card: rgba(18, 28, 48, 0.72);
+            --bg-card-hover: rgba(26, 40, 68, 0.85);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(14, 165, 233, 0.35);
+            --primary: #0EA5E9;
+            --primary-glow: rgba(14, 165, 233, 0.25);
+            --teal: #14B8A6;
+            --teal-dark: #0F766E;
+            --amber: #F59E0B;
+            --amber-bg: rgba(245, 158, 11, 0.12);
+            --emerald: #10B981;
+            --rose: #F43F5E;
+            --text-main: #F1F5F9;
+            --text-muted: #94A3B8;
+            --text-faint: #64748B;
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-full: 9999px;
+            --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+            --shadow-glow: 0 0 25px rgba(14, 165, 233, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 10%, rgba(14, 165, 233, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(20, 184, 166, 0.08) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3, h4, .brand-title {
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: -0.02em;
+        }
+
+        /* Top Navigation Header */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(8, 12, 20, 0.82);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .brand-logo {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #0EA5E9, #14B8A6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.4);
+        }
+
+        .brand-text h1 {
+            font-size: 19px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #F8FAFC, #38BDF8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text p {
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .health-badge {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 12px;
+            border-radius: var(--radius-full);
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            font-size: 12px;
+            font-weight: 500;
+            color: #34D399;
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            background-color: #10B981;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #10B981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .role-switch-container {
+            display: flex;
+            background: rgba(14, 22, 38, 0.9);
+            padding: 3px;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .role-btn {
+            padding: 7px 16px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .role-btn.active {
+            background: linear-gradient(135deg, #0284C7, #0EA5E9);
+            color: #FFFFFF;
+            box-shadow: 0 2px 10px rgba(14, 165, 233, 0.35);
+        }
+
+        .btn-docs {
+            padding: 8px 14px;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-docs:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Main Container & Layout */
+        main {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Tab Navigation */
+        .tab-bar {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 600;
+            padding: 9px 18px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab-btn.active {
+            color: #38BDF8;
+            background: rgba(14, 165, 233, 0.12);
+            border: 1px solid rgba(14, 165, 233, 0.25);
+        }
+
+        /* Grid Layouts */
+        .grid-split {
+            display: grid;
+            grid-template-columns: 460px 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-split {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Glass Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: var(--shadow-card);
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.14);
+        }
+
+        .card-header {
+            margin-bottom: 20px;
+        }
+
+        .card-header h2 {
+            font-size: 19px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-header p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 7px;
+            color: #E2E8F0;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 14px;
+            background: rgba(10, 16, 28, 0.85);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-main);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 90px;
+        }
+
+        /* Category Selector Chips */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .category-chip {
+            padding: 11px 12px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+        }
+
+        .category-chip:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(15, 23, 42, 0.9);
+            color: var(--text-main);
+        }
+
+        .category-chip.active {
+            background: rgba(14, 165, 233, 0.15);
+            border-color: var(--primary);
+            color: #38BDF8;
+            box-shadow: 0 0 12px rgba(14, 165, 233, 0.2);
+        }
+
+        /* Photo Upload Dropzone */
+        .upload-dropzone {
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: var(--radius-md);
+            padding: 22px;
+            text-align: center;
+            background: rgba(10, 18, 32, 0.5);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .upload-dropzone:hover {
+            border-color: var(--primary);
+            background: rgba(14, 165, 233, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 32px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .upload-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #E2E8F0;
+        }
+
+        .upload-subtitle {
+            font-size: 11px;
+            color: var(--teal);
+            font-weight: 500;
+            margin-top: 4px;
+        }
+
+        .upload-preview {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .preview-thumb {
+            width: 80px;
+            height: 80px;
+            border-radius: var(--radius-sm);
+            object-fit: cover;
+            border: 1px solid var(--border-subtle);
+            position: relative;
+        }
+
+        .preview-box {
+            position: relative;
+            display: inline-block;
+        }
+
+        .preview-badge {
+            position: absolute;
+            bottom: 3px;
+            left: 3px;
+            right: 3px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #38BDF8;
+            font-size: 9px;
+            font-weight: 700;
+            text-align: center;
+            border-radius: 4px;
+            padding: 1px 0;
+        }
+
+        .btn-remove-thumb {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #F43F5E;
+            color: white;
+            border: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, #0284C7, #0EA5E9);
+            border: none;
+            color: #FFFFFF;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 16px rgba(14, 165, 233, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(14, 165, 233, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Map & Discovery Panel */
+        #map {
+            width: 100%;
+            height: 480px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-subtle);
+            z-index: 10;
+        }
+
+        .filter-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .radius-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(14, 22, 38, 0.9);
+            padding: 4px;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .radius-pill {
+            padding: 5px 12px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 600;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .radius-pill.active {
+            background: rgba(14, 165, 233, 0.25);
+            color: #38BDF8;
+        }
+
+        /* Feed Cards */
+        .feed-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-top: 16px;
+            max-height: 580px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+
+        .feed-card {
+            background: rgba(14, 22, 38, 0.7);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .feed-card:hover {
+            border-color: rgba(14, 165, 233, 0.4);
+            background: rgba(18, 28, 48, 0.85);
+            transform: translateY(-2px);
+        }
+
+        .feed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .feed-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #F8FAFC;
+        }
+
+        .status-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: var(--radius-full);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .status-submitted { background: rgba(56, 189, 248, 0.15); color: #38BDF8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .status-processing { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .status-authority_queue { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .status-action_in_progress { background: rgba(59, 130, 246, 0.15); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .status-resolved { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+        .feed-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Authority Actions Panel */
+        .authority-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-top: 14px;
+        }
+
+        .authority-table th {
+            text-align: left;
+            padding: 10px 14px;
+            color: var(--text-faint);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .authority-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: #E2E8F0;
+        }
+
+        .btn-action-sm {
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-ack { background: rgba(245, 158, 11, 0.2); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.4); }
+        .btn-ack:hover { background: rgba(245, 158, 11, 0.4); }
+
+        .btn-dispatch { background: rgba(14, 165, 233, 0.2); color: #38BDF8; border: 1px solid rgba(14, 165, 233, 0.4); }
+        .btn-dispatch:hover { background: rgba(14, 165, 233, 0.4); }
+
+        .btn-resolve { background: rgba(16, 185, 129, 0.2); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .btn-resolve:hover { background: rgba(16, 185, 129, 0.4); }
+
+        /* Modal Dialog */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(4, 7, 13, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: #0E1626;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 520px;
+            padding: 26px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+
+        .btn-close-modal {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 22px;
+            cursor: pointer;
+        }
+
+        /* Banner info */
+        .info-strip {
+            background: rgba(20, 184, 166, 0.08);
+            border: 1px solid rgba(20, 184, 166, 0.25);
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 12px;
+            color: #2DD4BF;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header>
+        <a href="#" class="brand-container">
+            <div class="brand-logo">⚡</div>
+            <div class="brand-text">
+                <h1>InfraNex AI</h1>
+                <p>Civic Repair Intelligence Platform</p>
+            </div>
+        </a>
+
+        <div class="nav-actions">
+            <div class="health-badge" id="healthBadge">
+                <div class="pulse-dot"></div>
+                <span id="healthText">Connecting...</span>
+            </div>
+
+            <div class="role-switch-container">
+                <button class="role-btn active" id="btnRoleCitizen" onclick="switchRole('CITIZEN')">
+                    🏛️ Citizen
+                </button>
+                <button class="role-btn" id="btnRoleAuthority" onclick="switchRole('AUTHORITY')">
+                    👷 Authority Portal
+                </button>
+            </div>
+
+            <a href="/docs" target="_blank" class="btn-docs">
+                <span>📖 API Docs (/docs)</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main>
+        <!-- Citizen View -->
+        <div id="viewCitizen">
+            <div class="tab-bar">
+                <button class="tab-btn active" onclick="switchCitizenTab('feed')">
+                    🗺️ Nearby Public Feed & Map
+                </button>
+                <button class="tab-btn" onclick="switchCitizenTab('report')">
+                    📸 Report New Defect
+                </button>
+                <button class="tab-btn" onclick="switchCitizenTab('myreports')">
+                    📋 My Reports & Timeline
+                </button>
+            </div>
+
+            <!-- Tab: Feed & Map -->
+            <div id="subtabFeed">
+                <div class="grid-split">
+                    <div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Interactive Civic Map</h2>
+                                <p>Live OpenStreetMap discovery across municipal jurisdictions</p>
+                            </div>
+                            <div id="map"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="card">
+                            <div class="filter-strip">
+                                <h3 style="font-size: 16px; font-weight: 700;">Live Civic Incidents (<span id="feedCount">0</span>)</h3>
+                                <div class="radius-selector">
+                                    <button class="radius-pill active" onclick="setRadiusFilter(null)">All</button>
+                                    <button class="radius-pill" onclick="setRadiusFilter(5)">5 km</button>
+                                    <button class="radius-pill" onclick="setRadiusFilter(15)">15 km</button>
+                                    <button class="radius-pill" onclick="setRadiusFilter(50)">50 km</button>
+                                </div>
+                            </div>
+
+                            <div class="feed-list" id="feedListContainer">
+                                <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                    Loading civic complaints...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Report New Defect -->
+            <div id="subtabReport" style="display: none;">
+                <div style="max-width: 680px; margin: 0 auto;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>📸 Report Civic Infrastructure Defect</h2>
+                            <p>Direct photographic verification with automated offline CLIP AI assessment</p>
+                        </div>
+
+                        <div class="info-strip">
+                            <span>🛡️</span>
+                            <span>Direct Camera & Photo Upload • The photo/evidence is Below 10MB</span>
+                        </div>
+
+                        <form id="formReport" onsubmit="handleComplaintSubmit(event)">
+                            <div class="form-group">
+                                <label>Defect Category *</label>
+                                <div class="category-grid" id="categoryGrid">
+                                    <div class="category-chip active" data-cat="POTHOLE" onclick="selectCategory('POTHOLE')">🕳️ Pothole</div>
+                                    <div class="category-chip" data-cat="BROKEN_STREETLIGHT" onclick="selectCategory('BROKEN_STREETLIGHT')">💡 Broken Streetlight</div>
+                                    <div class="category-chip" data-cat="GARBAGE" onclick="selectCategory('GARBAGE')">🗑️ Garbage / Waste</div>
+                                    <div class="category-chip" data-cat="WATER_LEAKAGE" onclick="selectCategory('WATER_LEAKAGE')">💧 Water Leakage</div>
+                                    <div class="category-chip" data-cat="DAMAGED_ROAD" onclick="selectCategory('DAMAGED_ROAD')">🚧 Damaged Road</div>
+                                    <div class="category-chip" data-cat="OTHER" onclick="selectCategory('OTHER')">⚠️ Other Hazard</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="inputTitle">Title / Issue Summary *</label>
+                                <input type="text" id="inputTitle" class="form-control" placeholder="e.g. Hazardous deep pothole near junction" minlength="3" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="inputDesc">Detailed Description *</label>
+                                <textarea id="inputDesc" class="form-control" placeholder="Describe size, traffic obstruction, or immediate danger..." minlength="5" required></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="inputAddress">Location Address or Landmark</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="inputAddress" class="form-control" placeholder="e.g. 5th Cross, 100ft Ring Road, Indiranagar">
+                                    <button type="button" class="btn-docs" onclick="acquireBrowserGPS()" style="white-space: nowrap;">
+                                        📍 GPS
+                                    </button>
+                                </div>
+                                <span id="gpsCoordsDisplay" style="font-size: 11px; color: var(--teal); margin-top: 4px; display: block;"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Photo Evidence (Below 10MB)</label>
+                                <div class="upload-dropzone" onclick="document.getElementById('fileInput').click()">
+                                    <span class="upload-icon">📷</span>
+                                    <div class="upload-title">Click to attach photo evidence</div>
+                                    <div class="upload-subtitle">Live Camera or File • The photo/evidence is Below 10MB</div>
+                                    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handleFileSelection(event)">
+                                </div>
+                                <div class="upload-preview" id="photoPreviewContainer"></div>
+                            </div>
+
+                            <button type="submit" class="btn-primary" id="btnSubmitReport">
+                                <span>🚀 Submit Civic Complaint</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: My Reports -->
+            <div id="subtabMyReports" style="display: none;">
+                <div class="card" style="max-width: 900px; margin: 0 auto;">
+                    <div class="card-header">
+                        <h2>📋 My Filed Civic Reports</h2>
+                        <p>Isolated to your browser session citizen ID: <code id="citizenIdLabel" style="color: #38BDF8;"></code></p>
+                    </div>
+                    <div id="myReportsContainer" class="feed-list">
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            No reports filed in this session yet.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Municipal Authority Portal View -->
+        <div id="viewAuthority" style="display: none;">
+            <div class="card">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>👷 Municipal Authority Dispatch Queue</h2>
+                        <p>Multi-domain municipal governance: BBMP Roads, BESCOM Power & Streetlights, SWM Sanitation</p>
+                    </div>
+                    <div id="authorityAuthBadge" style="display: flex; align-items: center; gap: 10px;">
+                        <button class="btn-primary" onclick="openStaffLoginModal()" style="width: auto; padding: 8px 16px; font-size: 13px;">
+                            🔐 Staff Login
+                        </button>
+                    </div>
+                </div>
+
+                <div class="filter-strip" style="background: rgba(10, 16, 28, 0.6); padding: 12px; border-radius: var(--radius-md);">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span style="font-size: 12px; color: var(--text-muted);">Filter Domain:</span>
+                        <select id="authDomainFilter" class="form-control" style="width: 180px; padding: 6px 10px; font-size: 12px;" onchange="loadAuthorityQueue()">
+                            <option value="">All Domains</option>
+                            <option value="ROADS">BBMP Roads</option>
+                            <option value="STREETLIGHTS">BESCOM Streetlights</option>
+                            <option value="SANITATION">SWM Sanitation</option>
+                            <option value="ELECTRICITY">Power & Bescom</option>
+                        </select>
+                    </div>
+                    <button class="btn-docs" onclick="loadAuthorityQueue()">🔄 Refresh Queue</button>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table class="authority-table">
+                        <thead>
+                            <tr>
+                                <th>Ref ID</th>
+                                <th>Category & Title</th>
+                                <th>Domain & Department</th>
+                                <th>Status</th>
+                                <th>AI Confidence</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="authorityQueueBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-muted);">
+                                    Please log in as an authorized municipal staff member to view and act on dispatch items.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Staff Login Modal -->
+    <div class="modal-overlay" id="staffLoginModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 style="font-size: 18px; font-weight: 700;">🔐 Municipal Staff Authentication</h3>
+                <button class="btn-close-modal" onclick="closeStaffLoginModal()">&times;</button>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                Enter verified municipal credentials. Standard test account: <code>authority_officer</code> / <code>AuthorityPassword2026!</code>
+            </p>
+            <form onsubmit="handleStaffLogin(event)">
+                <div class="form-group">
+                    <label>Staff Username *</label>
+                    <input type="text" id="staffUsernameInput" class="form-control" value="authority_officer" required>
+                </div>
+                <div class="form-group">
+                    <label>Staff Password *</label>
+                    <input type="password" id="staffPasswordInput" class="form-control" value="AuthorityPassword2026!" required>
+                </div>
+                <div id="staffLoginError" style="color: #F43F5E; font-size: 12px; margin-bottom: 12px; display: none;"></div>
+                <button type="submit" class="btn-primary" id="btnStaffLoginSubmit">
+                    <span>Authorize Session</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Action Modal (Dispatch / Resolve) -->
+    <div class="modal-overlay" id="actionModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 style="font-size: 18px; font-weight: 700;" id="actionModalTitle">Action</h3>
+                <button class="btn-close-modal" onclick="closeActionModal()">&times;</button>
+            </div>
+            <form onsubmit="handleActionSubmit(event)">
+                <input type="hidden" id="actionModalComplaintId">
+                <input type="hidden" id="actionModalType">
+                <div class="form-group" id="actionWorkOrderGroup" style="display: none;">
+                    <label>Work Order / Ticket Reference</label>
+                    <input type="text" id="actionWorkOrderInput" class="form-control" placeholder="e.g. WO-BBMP-2026-9921">
+                </div>
+                <div class="form-group">
+                    <label>Official Field Notes *</label>
+                    <textarea id="actionNotesInput" class="form-control" placeholder="Details of field crew assignment or repair completion..." required></textarea>
+                </div>
+                <button type="submit" class="btn-primary" id="btnActionModalSubmit">
+                    <span>Confirm Action</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Complaint Detail & Evidence Modal -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-card" style="max-width: 640px;">
+            <div class="modal-header">
+                <h3 style="font-size: 18px; font-weight: 700;" id="detailModalTitle">Complaint Details</h3>
+                <button class="btn-close-modal" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div id="detailModalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let currentRole = 'CITIZEN';
+        let currentCitizenTab = 'feed';
+        let selectedCategory = 'POTHOLE';
+        let currentRadiusKm = null;
+        let selectedFile = null;
+        let userLat = 12.9716; // Default Bangalore Center
+        let userLng = 77.5946;
+        let leafletMap = null;
+        let mapMarkers = [];
+        let staffToken = localStorage.getItem('infranex_staff_token') || null;
+        let staffUser = localStorage.getItem('infranex_staff_user') || null;
+
+        // Citizen ID initialization (matches Android SessionManager)
+        let citizenId = localStorage.getItem('infranex_citizen_id');
+        if (!citizenId) {
+            citizenId = 'ctz_' + crypto.randomUUID();
+            localStorage.setItem('infranex_citizen_id', citizenId);
+        }
+        document.getElementById('citizenIdLabel').textContent = citizenId;
+
+        // On Page Load
+        window.addEventListener('DOMContentLoaded', () => {
+            initLeafletMap();
+            checkSystemHealth();
+            loadPublicFeed();
+            updateStaffAuthUI();
+        });
+
+        // Initialize Leaflet Map
+        function initLeafletMap() {
+            leafletMap = L.map('map').setView([userLat, userLng], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(leafletMap);
+        }
+
+        // Health Check
+        async function checkSystemHealth() {
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+                if (data.status === 'healthy') {
+                    document.getElementById('healthText').textContent = 'Live API Connected (' + data.database + ')';
+                }
+            } catch (err) {
+                document.getElementById('healthText').textContent = 'Server Offline';
+                document.getElementById('healthBadge').style.borderColor = '#F43F5E';
+            }
+        }
+
+        // Role Switching
+        function switchRole(role) {
+            currentRole = role;
+            if (role === 'CITIZEN') {
+                document.getElementById('btnRoleCitizen').classList.add('active');
+                document.getElementById('btnRoleAuthority').classList.remove('active');
+                document.getElementById('viewCitizen').style.display = 'block';
+                document.getElementById('viewAuthority').style.display = 'none';
+                setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 200);
+            } else {
+                document.getElementById('btnRoleCitizen').classList.remove('active');
+                document.getElementById('btnRoleAuthority').classList.add('active');
+                document.getElementById('viewCitizen').style.display = 'none';
+                document.getElementById('viewAuthority').style.display = 'block';
+                loadAuthorityQueue();
+            }
+        }
+
+        // Citizen Tabs
+        function switchCitizenTab(tab) {
+            currentCitizenTab = tab;
+            document.querySelectorAll('.tab-bar .tab-btn').forEach((btn, idx) => {
+                btn.classList.toggle('active', (tab === 'feed' && idx === 0) || (tab === 'report' && idx === 1) || (tab === 'myreports' && idx === 2));
+            });
+            document.getElementById('subtabFeed').style.display = tab === 'feed' ? 'block' : 'none';
+            document.getElementById('subtabReport').style.display = tab === 'report' ? 'block' : 'none';
+            document.getElementById('subtabMyReports').style.display = tab === 'myreports' ? 'block' : 'none';
+
+            if (tab === 'feed' && leafletMap) {
+                setTimeout(() => leafletMap.invalidateSize(), 200);
+            } else if (tab === 'myreports') {
+                loadMyReports();
+            }
+        }
+
+        // Category selection
+        function selectCategory(cat) {
+            selectedCategory = cat;
+            document.querySelectorAll('.category-chip').forEach(el => {
+                el.classList.toggle('active', el.getAttribute('data-cat') === cat);
+            });
+        }
+
+        // Radius filter
+        function setRadiusFilter(radius) {
+            currentRadiusKm = radius;
+            document.querySelectorAll('.radius-pill').forEach(el => {
+                const text = el.textContent;
+                el.classList.toggle('active', (radius === null && text === 'All') || (radius && text.startsWith(radius.toString())));
+            });
+            loadPublicFeed();
+        }
+
+        // Acquire Browser GPS
+        function acquireBrowserGPS() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    userLat = pos.coords.latitude;
+                    userLng = pos.coords.longitude;
+                    document.getElementById('gpsCoordsDisplay').textContent = `✓ Acquired GPS: ${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+                    if (leafletMap) {
+                        leafletMap.setView([userLat, userLng], 14);
+                    }
+                }, (err) => {
+                    alert("Unable to acquire GPS: " + err.message);
+                });
+            } else {
+                alert("Geolocation not supported by browser.");
+            }
+        }
+
+        // File selection with Below 10MB validation & preview
+        function handleFileSelection(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.size > 10 * 1024 * 1024) {
+                alert("File size exceeds 10MB limit. Please choose a photo below 10MB.");
+                event.target.value = '';
+                return;
+            }
+
+            selectedFile = file;
+            const container = document.getElementById('photoPreviewContainer');
+            container.innerHTML = '';
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const mb = (file.size / (1024 * 1024)).toFixed(1);
+                container.innerHTML = `
+                    <div class="preview-box">
+                        <img src="${e.target.result}" class="preview-thumb">
+                        <div class="preview-badge">Below 10MB (${mb}M)</div>
+                        <button type="button" class="btn-remove-thumb" onclick="removeSelectedFile()">&times;</button>
+                    </div>
+                `;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeSelectedFile() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('photoPreviewContainer').innerHTML = '';
+        }
+
+        // Submit Complaint
+        async function handleComplaintSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitReport');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳ Submitting Complaint...</span>';
+
+            const title = document.getElementById('inputTitle').value.trim();
+            const description = document.getElementById('inputDesc').value.trim();
+            const location_address = document.getElementById('inputAddress').value.trim() || null;
+
+            try {
+                // 1. Create complaint record
+                const payload = {
+                    title,
+                    category: selectedCategory,
+                    description,
+                    location_address,
+                    latitude: userLat,
+                    longitude: userLng,
+                    location_type: location_address ? "MANUAL" : "GPS",
+                    citizen_id: citizenId
+                };
+
+                const res = await fetch('/api/complaints', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Submission failed");
+                }
+
+                const complaint = await res.json();
+
+                // 2. Upload photo evidence if attached
+                if (selectedFile) {
+                    btn.innerHTML = '<span>📷 Uploading Photo Evidence...</span>';
+                    const formData = new FormData();
+                    formData.append('file', selectedFile);
+                    formData.append('evidence_type', 'INITIAL_REPORT');
+
+                    const uploadRes = await fetch(`/api/complaints/${complaint.id}/evidence`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (!uploadRes.ok) {
+                        console.warn("Evidence upload issue");
+                    }
+                }
+
+                alert(`🎉 Complaint filed successfully!\nReference ID: ${complaint.reference_id}`);
+                
+                // Reset form
+                document.getElementById('formReport').reset();
+                removeSelectedFile();
+                btn.disabled = false;
+                btn.innerHTML = '<span>🚀 Submit Civic Complaint</span>';
+
+                // Switch to feed
+                switchCitizenTab('feed');
+                loadPublicFeed();
+
+            } catch (err) {
+                alert("Error: " + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<span>🚀 Submit Civic Complaint</span>';
+            }
+        }
+
+        // Load Public Feed and Plot on Leaflet Map
+        async function loadPublicFeed() {
+            try {
+                let url = '/api/public/complaints?limit=50';
+                if (currentRadiusKm && userLat && userLng) {
+                    url += `&lat=${userLat}&lng=${userLng}&radius_km=${currentRadiusKm}&sort_by=distance`;
+                }
+
+                const res = await fetch(url);
+                const items = await res.json();
+
+                document.getElementById('feedCount').textContent = items.length;
+                const container = document.getElementById('feedListContainer');
+
+                // Clear map markers
+                mapMarkers.forEach(m => leafletMap.removeLayer(m));
+                mapMarkers = [];
+
+                if (items.length === 0) {
+                    container.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);">No complaints found in this radius.</div>`;
+                    return;
+                }
+
+                let html = '';
+                items.forEach(item => {
+                    const statusClass = 'status-' + (item.status.toLowerCase());
+                    const distStr = item.distance_km ? `📍 ${item.distance_km} km away` : '';
+                    const photoChip = item.evidence_count > 0 ? `📷 ${item.evidence_count} photo${item.evidence_count > 1 ? 's' : ''}` : 'No photos';
+
+                    html += `
+                        <div class="feed-card" onclick="openComplaintDetail('${item.id}')">
+                            <div class="feed-header">
+                                <div class="feed-title">${item.title}</div>
+                                <span class="status-badge ${statusClass}">${item.status.replace('_', ' ')}</span>
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-muted);">${item.location_address || 'GPS Coordinates Recorded'}</div>
+                            <div class="feed-meta">
+                                <span class="meta-item">🏷️ ${item.category}</span>
+                                <span class="meta-item">🆔 ${item.reference_id}</span>
+                                <span class="meta-item">${photoChip}</span>
+                                ${distStr ? `<span class="meta-item">${distStr}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+
+                    // Add map marker
+                    if (item.latitude && item.longitude && leafletMap) {
+                        const marker = L.marker([item.latitude, item.longitude])
+                            .addTo(leafletMap)
+                            .bindPopup(`<b>${item.title}</b><br>${item.category}<br>Status: ${item.status}<br><button onclick="openComplaintDetail('${item.id}')" style="margin-top:6px; cursor:pointer;">View Details</button>`);
+                        mapMarkers.push(marker);
+                    }
+                });
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                console.error("Feed error:", err);
+            }
+        }
+
+        // Load My Reports
+        async function loadMyReports() {
+            const container = document.getElementById('myReportsContainer');
+            try {
+                const res = await fetch(`/api/complaints?citizen_id=${citizenId}`);
+                const items = await res.json();
+                if (items.length === 0) {
+                    container.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);">You haven't filed any reports in this session yet.</div>`;
+                    return;
+                }
+
+                let html = '';
+                items.forEach(item => {
+                    const statusClass = 'status-' + (item.status.toLowerCase());
+                    html += `
+                        <div class="feed-card" onclick="openComplaintDetail('${item.id}')">
+                            <div class="feed-header">
+                                <div class="feed-title">${item.title}</div>
+                                <span class="status-badge ${statusClass}">${item.status.replace('_', ' ')}</span>
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-muted);">${item.location_address || 'GPS Location'}</div>
+                            <div class="feed-meta">
+                                <span class="meta-item">🏷️ ${item.category}</span>
+                                <span class="meta-item">🆔 ${item.reference_id}</span>
+                                <span class="meta-item">📷 ${item.evidence_count} photos</span>
+                                <span class="meta-item">🕒 ${new Date(item.created_at).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = `<div style="color: #F43F5E;">Error loading reports: ${err.message}</div>`;
+            }
+        }
+
+        // Open Complaint Details
+        async function openComplaintDetail(id) {
+            const modal = document.getElementById('detailModal');
+            const body = document.getElementById('detailModalBody');
+            body.innerHTML = 'Loading details...';
+            modal.classList.add('active');
+
+            try {
+                const res = await fetch(`/api/public/complaints/${id}`);
+                const data = await res.json();
+
+                let photosHtml = '';
+                if (data.evidence_items && data.evidence_items.length > 0) {
+                    photosHtml = '<div style="margin-top: 14px;"><h4 style="font-size:13px; margin-bottom:8px;">Photographic Evidence:</h4><div style="display:flex; gap:10px; flex-wrap:wrap;">';
+                    data.evidence_items.forEach(ev => {
+                        photosHtml += `
+                            <div style="position:relative;">
+                                <img src="${ev.file_url}" style="width:140px; height:100px; object-fit:cover; border-radius:8px; border:1px solid var(--border-subtle);">
+                                <div style="font-size:10px; color:#38BDF8; margin-top:2px;">${(ev.file_size / 1024).toFixed(0)} KB • Below 10MB</div>
+                            </div>
+                        `;
+                    });
+                    photosHtml += '</div></div>';
+                }
+
+                body.innerHTML = `
+                    <div style="margin-bottom: 12px;">
+                        <span class="status-badge status-${data.status.toLowerCase()}">${data.status}</span>
+                        <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">Ref: ${data.reference_id}</span>
+                    </div>
+                    <h3 style="font-size: 17px; margin-bottom: 8px;">${data.title}</h3>
+                    <p style="font-size: 14px; color: #CBD5E1; line-height: 1.5; margin-bottom: 12px;">${data.description}</p>
+                    <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">📍 ${data.location_address || 'GPS Coordinates Recorded'}</div>
+                    <div style="font-size: 12px; color: var(--text-faint);">Category: ${data.category} • Reported: ${new Date(data.created_at).toLocaleString()}</div>
+                    ${photosHtml}
+                `;
+            } catch (err) {
+                body.innerHTML = `<div style="color: #F43F5E;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.remove('active');
+        }
+
+        // Staff Auth UI & Login
+        function updateStaffAuthUI() {
+            const badge = document.getElementById('authorityAuthBadge');
+            if (staffToken && staffUser) {
+                badge.innerHTML = `
+                    <span style="font-size: 12px; color: #34D399; font-weight:600;">👤 ${staffUser} (AUTHORITY)</span>
+                    <button class="btn-docs" onclick="logoutStaff()" style="padding: 6px 12px; font-size:11px;">Logout</button>
+                `;
+            } else {
+                badge.innerHTML = `
+                    <button class="btn-primary" onclick="openStaffLoginModal()" style="width: auto; padding: 8px 16px; font-size: 13px;">
+                        🔐 Staff Login
+                    </button>
+                `;
+            }
+        }
+
+        function openStaffLoginModal() {
+            document.getElementById('staffLoginModal').classList.add('active');
+        }
+
+        function closeStaffLoginModal() {
+            document.getElementById('staffLoginModal').classList.remove('active');
+        }
+
+        async function handleStaffLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('staffUsernameInput').value.trim();
+            const password = document.getElementById('staffPasswordInput').value.trim();
+            const errDiv = document.getElementById('staffLoginError');
+            errDiv.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username,
+                        password,
+                        requested_role: 'AUTHORITY'
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Authentication rejected");
+                }
+
+                const data = await res.json();
+                staffToken = data.access_token;
+                staffUser = data.user_id;
+                localStorage.setItem('infranex_staff_token', staffToken);
+                localStorage.setItem('infranex_staff_user', staffUser);
+
+                closeStaffLoginModal();
+                updateStaffAuthUI();
+                loadAuthorityQueue();
+            } catch (err) {
+                errDiv.textContent = err.message;
+                errDiv.style.display = 'block';
+            }
+        }
+
+        function logoutStaff() {
+            staffToken = null;
+            staffUser = null;
+            localStorage.removeItem('infranex_staff_token');
+            localStorage.removeItem('infranex_staff_user');
+            updateStaffAuthUI();
+            loadAuthorityQueue();
+        }
+
+        // Load Authority Queue
+        async function loadAuthorityQueue() {
+            const tbody = document.getElementById('authorityQueueBody');
+            if (!staffToken) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-muted);">Please log in as an authorized municipal staff member to view and act on dispatch items.</td></tr>`;
+                return;
+            }
+
+            const domain = document.getElementById('authDomainFilter').value;
+            let url = '/api/authority/queue';
+            if (domain) url += `?domain=${domain}`;
+
+            try {
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${staffToken}` }
+                });
+
+                if (res.status === 401 || res.status === 403) {
+                    logoutStaff();
+                    throw new Error("Session expired. Please log in again.");
+                }
+
+                const items = await res.json();
+                if (items.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 30px; color: #34D399;">✓ No pending complaints in this queue. All clear!</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                items.forEach(item => {
+                    const statusClass = 'status-' + (item.status.toLowerCase());
+                    const score = item.latest_confidence_score ? (item.latest_confidence_score * 100).toFixed(0) + '%' : 'Manual';
+                    
+                    html += `
+                        <tr>
+                            <td><code>${item.reference_id}</code></td>
+                            <td>
+                                <div style="font-weight:600; color:#F8FAFC;">${item.title}</div>
+                                <div style="font-size:11px; color:var(--text-muted);">${item.category} • ${item.location_address || 'GPS'}</div>
+                            </td>
+                            <td>
+                                <div>${item.service_domain || 'General'}</div>
+                                <div style="font-size:11px; color:var(--text-muted);">${item.assigned_department || 'Unassigned'}</div>
+                            </td>
+                            <td><span class="status-badge ${statusClass}">${item.status.replace('_', ' ')}</span></td>
+                            <td><span style="color:#38BDF8; font-weight:600;">${score}</span></td>
+                            <td>
+                                <div style="display:flex; gap:6px;">
+                                    <button class="btn-action-sm btn-ack" onclick="openActionModal('${item.id}', 'ACKNOWLEDGE')">Acknowledge</button>
+                                    <button class="btn-action-sm btn-dispatch" onclick="openActionModal('${item.id}', 'DISPATCH')">Dispatch</button>
+                                    <button class="btn-action-sm btn-resolve" onclick="openActionModal('${item.id}', 'RESOLVE')">Resolve</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #F43F5E;">${err.message}</td></tr>`;
+            }
+        }
+
+        // Action Modal
+        function openActionModal(complaintId, actionType) {
+            document.getElementById('actionModalComplaintId').value = complaintId;
+            document.getElementById('actionModalType').value = actionType;
+            document.getElementById('actionModalTitle').textContent = `Execute ${actionType}`;
+            document.getElementById('actionWorkOrderGroup').style.display = actionType === 'DISPATCH' ? 'block' : 'none';
+            document.getElementById('actionNotesInput').value = actionType === 'ACKNOWLEDGE' ? 'Municipal team acknowledged incident and scheduled field inspection.' : '';
+            document.getElementById('actionModal').classList.add('active');
+        }
+
+        function closeActionModal() {
+            document.getElementById('actionModal').classList.remove('active');
+        }
+
+        async function handleActionSubmit(e) {
+            e.preventDefault();
+            const complaintId = document.getElementById('actionModalComplaintId').value;
+            const actionType = document.getElementById('actionModalType').value;
+            const notes = document.getElementById('actionNotesInput').value.trim();
+            const work_order_reference = document.getElementById('actionWorkOrderInput').value.trim() || null;
+
+            try {
+                let endpoint = '';
+                let body = {};
+                if (actionType === 'ACKNOWLEDGE') {
+                    endpoint = `/api/authority/complaints/${complaintId}/acknowledge`;
+                    body = { notes };
+                } else if (actionType === 'DISPATCH') {
+                    endpoint = `/api/authority/complaints/${complaintId}/dispatch`;
+                    body = { notes, work_order_reference };
+                } else if (actionType === 'RESOLVE') {
+                    endpoint = `/api/authority/complaints/${complaintId}/resolve`;
+                    body = { notes, work_order_reference };
+                }
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${staffToken}`
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Action failed");
+                }
+
+                alert(`✓ ${actionType} action recorded successfully!`);
+                closeActionModal();
+                loadAuthorityQueue();
+            } catch (err) {
+                alert("Error: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
