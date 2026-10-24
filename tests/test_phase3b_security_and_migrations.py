@@ -334,3 +334,30 @@ def test_alembic_migration_chain_and_enums():
     # Check ReviewDecisionAction
     for val in mig.REVIEW_DECISION_ACTION_NEW_VALUES:
         assert val in [e.value for e in ReviewDecisionAction]
+
+
+def test_user_table_is_active_boolean_default_cross_dialect_compatibility():
+    """Verify that migration g2678cdef012 is_active default compiles cleanly for both PostgreSQL and SQLite."""
+    import sqlalchemy as sa
+    from sqlalchemy.dialects import sqlite, postgresql
+    from sqlalchemy.schema import CreateTable
+
+    backend_dir = os.path.dirname(os.path.dirname(__file__))
+    migration_file = os.path.join(backend_dir, "alembic", "versions", "g2678cdef012_create_user_and_audit_log_tables.py")
+
+    with open(migration_file, "r") as f:
+        content = f.read()
+
+    assert "sa.text('1')" not in content, "server_default must not use SQLite-specific sa.text('1')"
+    assert "sa.true()" in content, "server_default must use cross-dialect sa.true()"
+
+    # Verify DDL compilation for both SQLite and PostgreSQL dialects
+    col = sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true())
+    tbl = sa.Table('users_test', sa.MetaData(), col)
+
+    sqlite_ddl = str(CreateTable(tbl).compile(dialect=sqlite.dialect()))
+    pg_ddl = str(CreateTable(tbl).compile(dialect=postgresql.dialect()))
+
+    assert "DEFAULT 1" in sqlite_ddl
+    assert "DEFAULT true" in pg_ddl
+

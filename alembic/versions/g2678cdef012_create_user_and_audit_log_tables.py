@@ -33,7 +33,7 @@ def upgrade() -> None:
             sa.Column('role', sa.String(length=32), nullable=False),
             sa.Column('department', sa.String(length=100), nullable=True),
             sa.Column('service_domains', sa.String(length=255), nullable=True),
-            sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('1')),
+            sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true()),
             sa.Column('created_at', sa.DateTime(), nullable=False),
             sa.Column('last_login_at', sa.DateTime(), nullable=True),
             sa.PrimaryKeyConstraint('id')
