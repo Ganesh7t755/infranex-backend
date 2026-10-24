@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User, UserRole
 from app.core.security_crypto import hash_password, verify_password
+from app.core.config import settings
 from app.schemas.user import UserCreateAdminRequest, UserUpdateAdminRequest
 
 DEFAULT_SEED_USERS = [
@@ -106,7 +107,10 @@ class UserService:
         self.db = db
 
     def sync_default_seed_accounts(self) -> None:
-        """Ensures all standard role accounts exist in the database with secure hashed credentials."""
+        """Ensures all standard role accounts exist in the database with secure hashed credentials strictly in dev/test."""
+        if not settings.is_development_or_test():
+            return
+
         for seed in DEFAULT_SEED_USERS:
             existing = self.db.query(User).filter(User.username == seed["username"]).first()
             if not existing:
@@ -137,8 +141,8 @@ class UserService:
         clean_user = username.strip().lower()
         user = self.db.query(User).filter(User.username == clean_user).first()
 
-        # If user not found in DB, check if it matches a default seed account and initialize it
-        if not user:
+        # If user not found in DB, check if it matches a default seed account strictly in development/test
+        if not user and settings.is_development_or_test():
             seed = next((s for s in DEFAULT_SEED_USERS if s["username"].lower() == clean_user), None)
             if seed:
                 user = User(
@@ -173,8 +177,8 @@ class UserService:
         candidate_pass = password.strip()
         is_valid = verify_password(candidate_pass, user.password_hash)
 
-        # Allow canonical dev shortcut passwords for convenience
-        if not is_valid:
+        # Allow canonical dev shortcut passwords for convenience strictly in development/test
+        if not is_valid and settings.is_development_or_test():
             if user.role == UserRole.AUTHORITY and candidate_pass in ("AuthorityPassword2026!", "Authority2026!"):
                 is_valid = True
             elif user.role == UserRole.REVIEWER and candidate_pass in ("ReviewerPassword2026!", "Reviewer2026!"):

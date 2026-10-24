@@ -13,7 +13,10 @@ from app.schemas.user import UserRegisterRequest, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication & Role Boundaries"])
 
-JWT_SECRET_KEY = getattr(settings, "JWT_SECRET_KEY", "infranex-cryptographic-jwt-secret-stage7-2026")
+def get_jwt_secret_key() -> str:
+    settings.validate_jwt_secret_for_production()
+    return getattr(settings, "JWT_SECRET_KEY", "infranex-cryptographic-jwt-secret-stage7-2026")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -139,12 +142,12 @@ def create_access_token(
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(hours=JWT_EXPIRATION_HOURS)).timestamp()),
     }
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, get_jwt_secret_key(), algorithm=JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict:
     try:
-        return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return jwt.decode(token, get_jwt_secret_key(), algorithms=[JWT_ALGORITHM])
     except jwt.PyJWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -184,50 +187,52 @@ def login_staff(
             requested_role=effective_role
         )
     except HTTPException as e:
-        # Check backward compatibility with in-memory VALID_STAFF_ACCOUNTS for edge testing
-        staff_info = VALID_STAFF_ACCOUNTS.get(clean_user)
-        if staff_info:
-            candidate_pass = req.password.strip()
-            is_valid_pass = (candidate_pass == staff_info.get("password")) or \
-                (staff_info["role"] == "AUTHORITY" and candidate_pass in ("AuthorityPassword2026!", "Authority2026!")) or \
-                (staff_info["role"] == "REVIEWER" and candidate_pass in ("ReviewerPassword2026!", "Reviewer2026!")) or \
-                (staff_info["role"] == "ADMIN" and candidate_pass in ("AdminPassword2026!", "Admin2026!"))
+        # Check backward compatibility with in-memory VALID_STAFF_ACCOUNTS strictly in development/test
+        if settings.is_development_or_test():
+            staff_info = VALID_STAFF_ACCOUNTS.get(clean_user)
+            if staff_info:
+                candidate_pass = req.password.strip()
+                is_valid_pass = (candidate_pass == staff_info.get("password")) or \
+                    (staff_info["role"] == "AUTHORITY" and candidate_pass in ("AuthorityPassword2026!", "Authority2026!")) or \
+                    (staff_info["role"] == "REVIEWER" and candidate_pass in ("ReviewerPassword2026!", "Reviewer2026!")) or \
+                    (staff_info["role"] == "ADMIN" and candidate_pass in ("AdminPassword2026!", "Admin2026!"))
 
-            if not is_valid_pass:
+                if not is_valid_pass:
+                    AuditService.log_event(
+                        db, action="LOGIN_FAILED", username=clean_user,
+                        details="Invalid password against directory", ip_address=client_ip
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid credentials."
+                    )
+
+                if effective_role and effective_role != staff_info["role"] and staff_info["role"] != "ADMIN":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Requested role '{effective_role}' conflicts with authorized role '{staff_info['role']}'."
+                    )
+
+                token = create_access_token(
+                    user_id=clean_user,
+                    role=staff_info["role"],
+                    department=staff_info["department"],
+                    domains=staff_info["domains"]
+                )
                 AuditService.log_event(
-                    db, action="LOGIN_FAILED", username=clean_user,
-                    details="Invalid password against directory", ip_address=client_ip
+                    db, action="LOGIN_SUCCESS", username=clean_user,
+                    role=staff_info["role"], details="Authenticated via fallback directory", ip_address=client_ip
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid credentials."
-                )
-
-            if effective_role and effective_role != staff_info["role"] and staff_info["role"] != "ADMIN":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Requested role '{effective_role}' conflicts with authorized role '{staff_info['role']}'."
+                return StaffLoginResponse(
+                    access_token=token,
+                    token_type="bearer",
+                    role=staff_info["role"],
+                    user_id=clean_user,
+                    department=staff_info["department"],
+                    service_domains=staff_info["domains"]
                 )
 
-            token = create_access_token(
-                user_id=clean_user,
-                role=staff_info["role"],
-                department=staff_info["department"],
-                domains=staff_info["domains"]
-            )
-            AuditService.log_event(
-                db, action="LOGIN_SUCCESS", username=clean_user,
-                role=staff_info["role"], details="Authenticated via fallback directory", ip_address=client_ip
-            )
-            return StaffLoginResponse(
-                access_token=token,
-                token_type="bearer",
-                role=staff_info["role"],
-                user_id=clean_user,
-                department=staff_info["department"],
-                service_domains=staff_info["domains"]
-            )
-
+        # In production (or if user not in dev fallback directory), fail without hardcoded bypass
         AuditService.log_event(
             db, action="LOGIN_FAILED", username=clean_user,
             details=str(e.detail), ip_address=client_ip

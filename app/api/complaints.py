@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, status, Query, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -19,6 +19,7 @@ from app.schemas.reviewer import ReviewDecisionResponse
 from app.services.complaint_service import ComplaintService
 from app.services.reviewer_service import ReviewerService
 from app.storage.file_storage import storage
+from app.core.security import get_current_user_optional, get_current_citizen_id, UserIdentity
 
 router = APIRouter(prefix="/api/complaints", tags=["Complaints"])
 
@@ -147,15 +148,67 @@ def upload_evidence(
 def get_evidence_file(
     complaint_id: str,
     evidence_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserIdentity = Depends(get_current_user_optional),
+    citizen_id: str = Depends(get_current_citizen_id),
 ):
     service = ComplaintService(db)
     complaint = service.get_complaint(complaint_id)
     evidence = next((e for e in complaint.evidence_items if e.id == evidence_id), None)
-    resolved_path = storage.resolve_path(evidence.file_path) if evidence else None
-    if not evidence or not resolved_path:
+    if not evidence:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found")
-    return FileResponse(resolved_path, media_type=evidence.mime_type, filename=evidence.file_name)
+
+    def _serve_evidence():
+        resolved_path = storage.resolve_path(evidence.file_path) if evidence else None
+        if resolved_path and os.path.exists(resolved_path):
+            return FileResponse(resolved_path, media_type=evidence.mime_type, filename=evidence.file_name)
+        stream = storage.get_stream(evidence.file_path) if evidence else None
+        if stream:
+            return StreamingResponse(
+                stream,
+                media_type=evidence.mime_type,
+                headers={"Content-Disposition": f'inline; filename="{evidence.file_name}"'}
+            )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence file not found")
+
+    # Public access allowed ONLY when explicitly approved
+    if evidence.is_public_approved:
+        return _serve_evidence()
+
+    # Authorized access checks:
+    # 1. Complaint owner (citizen who filed it, excluding generic guest ids)
+    is_owner = (
+        bool(complaint.citizen_id)
+        and (complaint.citizen_id in (current_user.user_id, citizen_id))
+        and current_user.user_id not in ("guest_citizen", "unknown", "")
+    )
+
+    # 2. Reviewer or Admin staff
+    is_staff_reviewer_or_admin = current_user.role in ("REVIEWER", "ADMIN")
+
+    # 3. Assigned Authority (domain or department match)
+    is_assigned_authority = (
+        current_user.role == "AUTHORITY" and (
+            (not current_user.domains or (complaint.service_domain and complaint.service_domain in current_user.domains)) or
+            (current_user.department and complaint.assigned_department == current_user.department)
+        )
+    )
+
+    if is_owner or is_staff_reviewer_or_admin or is_assigned_authority:
+        return _serve_evidence()
+
+    # Unauthenticated / guest access
+    if current_user.user_id in ("guest_citizen", "unknown") and citizen_id == "guest_citizen":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to access non-public evidence."
+        )
+
+    # Authenticated but unauthorized
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have authorization to view this private evidence file."
+    )
 
 @router.patch(
     "/{complaint_id}/evidence/{evidence_id}/moderation",

@@ -5,7 +5,10 @@ import jwt
 from fastapi import Header, HTTPException, status
 from app.core.config import settings
 
-JWT_SECRET_KEY = getattr(settings, "JWT_SECRET_KEY", "infranex-cryptographic-jwt-secret-stage7-2026")
+def get_jwt_secret_key() -> str:
+    settings.validate_jwt_secret_for_production()
+    return getattr(settings, "JWT_SECRET_KEY", "infranex-cryptographic-jwt-secret-stage7-2026")
+
 JWT_ALGORITHM = "HS256"
 
 
@@ -20,7 +23,7 @@ def create_access_token(user_id: str, role: str, department: Optional[str] = Non
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(hours=24)).timestamp()),
     }
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, get_jwt_secret_key(), algorithm=JWT_ALGORITHM)
 
 
 @dataclass
@@ -71,7 +74,7 @@ def get_current_reviewer(
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ", 1)[1].strip()
         try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, get_jwt_secret_key(), algorithms=[JWT_ALGORITHM])
             token_role = payload.get("role", "")
             if token_role not in ("REVIEWER", "ADMIN"):
                 raise HTTPException(
@@ -90,11 +93,11 @@ def get_current_reviewer(
                 detail=f"Invalid or expired reviewer token: {str(exc)}"
             )
 
-    # 2. Reject header-based simulation in production
-    if settings.ENVIRONMENT.lower() == "production":
+    # 2. Reject header-based simulation in production or non-dev/test environments
+    if not settings.is_development_or_test():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Production reviewer operations are disabled until Stage 7 cryptographic JWT authentication and RBAC are deployed."
+            detail="Production reviewer operations are disabled until Stage 7 cryptographic JWT authentication and RBAC are deployed. Reviewer header simulation and development tokens are disabled in production. Valid Bearer token required."
         )
 
     # 3. Development/test simulation boundary
@@ -128,7 +131,7 @@ def get_current_authority(
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ", 1)[1].strip()
         try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, get_jwt_secret_key(), algorithms=[JWT_ALGORITHM])
             token_role = payload.get("role", "")
             if token_role not in ("AUTHORITY", "ADMIN"):
                 raise HTTPException(
@@ -148,7 +151,14 @@ def get_current_authority(
                 detail=f"Invalid or expired authority token: {str(exc)}"
             )
 
-    # 2. Simulation checks
+    # 2. Reject header-based simulation in production or non-dev/test environments
+    if not settings.is_development_or_test():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Header-based authority operations and development tokens are disabled in production. Valid Bearer token required."
+        )
+
+    # 3. Development/test simulation checks
     clean_role = (x_role or "").strip()
     clean_auth_token = (x_authority_token or "").strip()
     clean_rev_token = (x_reviewer_token or "").strip()
@@ -159,13 +169,6 @@ def get_current_authority(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication credentials required. Please provide valid authority credentials or Bearer token."
-        )
-
-    # Production safety guard
-    if settings.ENVIRONMENT.lower() == "production":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Header-based authority operations are disabled in production until cryptographic JWT authentication is supplied."
         )
 
     # Reviewer credentials do not grant authority privileges
@@ -214,7 +217,7 @@ def get_current_admin(
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ", 1)[1].strip()
         try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, get_jwt_secret_key(), algorithms=[JWT_ALGORITHM])
             token_role = payload.get("role", "")
             if token_role != "ADMIN":
                 raise HTTPException(
@@ -235,7 +238,7 @@ def get_current_admin(
             )
 
     # Dev/test simulation boundary for admin
-    if settings.ENVIRONMENT.lower() != "production":
+    if settings.is_development_or_test():
         dev_admin_token = getattr(settings, "DEV_ADMIN_TOKEN", "infranex-dev-admin-secret-key-2026")
         if x_role == "ADMIN" or (x_admin_token and x_admin_token == dev_admin_token):
             return AdminIdentity(admin_id="admin_sim", role="ADMIN", is_simulated=True)
@@ -257,7 +260,7 @@ def get_current_citizen_id(
     if authorization and authorization.startswith("Bearer "):
         try:
             token = authorization.split(" ", 1)[1].strip()
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, get_jwt_secret_key(), algorithms=[JWT_ALGORITHM])
             return payload.get("sub", x_user_id or "guest_citizen")
         except Exception:
             pass
@@ -268,14 +271,19 @@ def get_current_citizen_id(
 def get_current_user_optional(
     authorization: Optional[str] = Header(None, alias="Authorization"),
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_role: Optional[str] = Header(None, alias="X-Role"),
+    x_department: Optional[str] = Header(None, alias="X-Department"),
+    x_reviewer_token: Optional[str] = Header(None, alias="X-Reviewer-Token"),
+    x_authority_token: Optional[str] = Header(None, alias="X-Authority-Token"),
 ) -> UserIdentity:
     """
     Returns user identity if authenticated, otherwise returns guest.
+    In production, role elevation requires a cryptographically verified Bearer token.
     """
     if authorization and authorization.startswith("Bearer "):
         try:
             token = authorization.split(" ", 1)[1].strip()
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, get_jwt_secret_key(), algorithms=[JWT_ALGORITHM])
             return UserIdentity(
                 user_id=payload.get("sub", "unknown"),
                 role=payload.get("role", "CITIZEN"),
@@ -285,8 +293,28 @@ def get_current_user_optional(
         except Exception:
             pass
 
+    # In development/test only, support simulation headers for backwards compatibility
+    if settings.is_development_or_test():
+        valid_rev = getattr(settings, "DEV_REVIEWER_TOKEN", "infranex-dev-reviewer-secret-key-stage5")
+        valid_auth = getattr(settings, "DEV_AUTHORITY_TOKEN", "infranex-dev-authority-secret-key-stage3")
+        role = "CITIZEN"
+        if x_role:
+            role = x_role.strip()
+        elif x_reviewer_token and x_reviewer_token == valid_rev:
+            role = "REVIEWER"
+        elif x_authority_token and x_authority_token == valid_auth:
+            role = "AUTHORITY"
+
+        return UserIdentity(
+            user_id=x_user_id or "guest_citizen",
+            role=role,
+            department=x_department or "Civic Public",
+            domains=["ROADS", "ELECTRICITY", "SANITATION", "STREETLIGHTS", "GENERAL_MAINTENANCE"] if role in ("REVIEWER", "AUTHORITY", "ADMIN") else []
+        )
+
+    # In production, unauthenticated requests or simulation headers resolve strictly to CITIZEN guest
     return UserIdentity(
-        user_id=x_user_id or "guest_citizen",
+        user_id="guest_citizen",
         role="CITIZEN",
         department="Civic Public",
         domains=[]

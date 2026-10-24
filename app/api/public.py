@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, status, Query, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -66,12 +66,21 @@ def get_public_evidence_file(
     service = ComplaintService(db)
     evidence = service.get_public_evidence(complaint_id, evidence_id)
     resolved_path = storage.resolve_path(evidence.file_path) if evidence else None
-    if not evidence or not resolved_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Evidence file not found on disk"
+    if resolved_path and os.path.exists(resolved_path):
+        return FileResponse(resolved_path, media_type=evidence.mime_type, filename=evidence.file_name)
+
+    stream = storage.get_stream(evidence.file_path) if evidence else None
+    if stream:
+        return StreamingResponse(
+            stream,
+            media_type=evidence.mime_type,
+            headers={"Content-Disposition": f'inline; filename="{evidence.file_name}"'}
         )
-    return FileResponse(resolved_path, media_type=evidence.mime_type, filename=evidence.file_name)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Evidence file not found on disk"
+    )
 
 
 @router.delete(

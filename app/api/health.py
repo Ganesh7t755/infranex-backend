@@ -12,7 +12,10 @@ def get_health(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
     except Exception as e:
-        db_status = f"unhealthy: {str(e)}"
+        if settings.is_development_or_test():
+            db_status = f"unhealthy: {str(e)}"
+        else:
+            db_status = "unhealthy: database connectivity failed"
 
     return {
         "status": "healthy" if db_status == "connected" else "degraded",

@@ -14,13 +14,16 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize SQLite tables on startup
-    Base.metadata.create_all(bind=engine)
-    try:
-        with SessionLocal() as db:
-            UserService(db).sync_default_seed_accounts()
-    except Exception:
-        pass
+    # In development or testing, initialize SQLite tables and default seed accounts automatically.
+    # In production, table creation and default seed resets are prevented; schema management
+    # must be executed explicitly via Alembic migrations.
+    if settings.is_development_or_test():
+        Base.metadata.create_all(bind=engine)
+        try:
+            with SessionLocal() as db:
+                UserService(db).sync_default_seed_accounts()
+        except Exception:
+            pass
     yield
 
 app = FastAPI(

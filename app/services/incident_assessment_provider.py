@@ -37,6 +37,37 @@ class IncidentAssessmentProvider(Protocol):
         """Analyze evidence and incident metadata to produce a structured assessment."""
         ...
 
+
+def build_unavailable_assessment_result(
+    provider_id: str = "ai_inference_unavailable",
+    model_name: str = "unconfigured",
+    reason: str = "INFERENCE_UNAVAILABLE",
+    explanation: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> IncidentAssessmentResult:
+    """
+    Returns an explicit truthful unavailable assessment result.
+    Prevents unverified or simulated confidence scores from being passed off as real image analysis.
+    Sets confidence_score to None, marks as simulated, and requires human review.
+    """
+    return IncidentAssessmentResult(
+        provider_id=provider_id,
+        model_name=model_name,
+        confidence_score=None,
+        detected_category=None,
+        category_match=None,
+        evidence_suitable=True,
+        explanation=explanation or "Automated AI image assessment is unavailable or unconfigured. Report queued for mandatory human review.",
+        limitations="Automated inference unavailable. Zero simulated confidence scores generated.",
+        is_simulation=True,
+        review_required=True,
+        assessment_metadata={
+            "status": "UNAVAILABLE",
+            "reason": reason,
+            **(metadata or {})
+        }
+    )
+
 # Per-category calibrated confidence scores reflecting realistic InfraNex model accuracy.
 # The 4 core civic categories are tuned strictly ABOVE the 90% bypass threshold.
 # OTHER / ambiguous categories fall below 90% to enforce human review.
@@ -75,6 +106,17 @@ class DeterministicMockAssessmentProvider:
         self.model_name = model_name
 
     def assess_incident(self, input_data: IncidentAssessmentInput) -> IncidentAssessmentResult:
+        from app.core.config import settings
+
+        # Production safety guard: simulated confidence scores must never be returned in production
+        if settings.is_production():
+            return build_unavailable_assessment_result(
+                provider_id=self.provider_id,
+                model_name=self.model_name,
+                reason="SIMULATED_SCORES_DISABLED_IN_PRODUCTION",
+                explanation="Automated image analysis is offline or unconfigured in production. Report queued for mandatory human review."
+            )
+
         # 1. Trigger simulated network / timeout errors if requested by keyword
         title_lower = (input_data.title or "").lower()
         ev_name_lower = (input_data.evidence_name or "").lower()
@@ -613,25 +655,160 @@ class ClipIncidentAssessmentProvider:
                     "concept_similarity": round(best_concept_sim, 4),
                 }
             )
-        except Exception:
-            return self.mock_fallback.assess_incident(input_data)
+        except Exception as exc:
+            from app.core.config import settings
+            if settings.is_development_or_test():
+                return self.mock_fallback.assess_incident(input_data)
+            return build_unavailable_assessment_result(
+                provider_id=self.provider_id,
+                model_name=self.model_name,
+                reason="LOCAL_INFERENCE_FAILED",
+                explanation="Local vision model failed to complete assessment. Report queued for mandatory human review.",
+                metadata={"error": type(exc).__name__}
+            )
+
+
+class ExternalInferenceProvider:
+    """
+    External AI inference client behind the IncidentAssessmentProvider protocol.
+    Calls an external HTTP service (e.g. cloud inference worker or HuggingFace endpoint).
+    Enforces safe timeouts and never claims external inference is operational when unconfigured.
+    """
+
+    def __init__(
+        self,
+        endpoint_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        timeout_seconds: Optional[float] = None,
+        provider_id: str = "external_ai_inference_v1",
+        model_name: str = "external-vision-model",
+    ):
+        from app.core.config import settings
+        self.endpoint_url = endpoint_url if endpoint_url is not None else getattr(settings, "AI_INFERENCE_URL", "")
+        self.api_key = api_key if api_key is not None else getattr(settings, "AI_INFERENCE_API_KEY", "")
+        self.timeout_seconds = timeout_seconds if timeout_seconds is not None else getattr(settings, "AI_INFERENCE_TIMEOUT_SECONDS", 10.0)
+        self.provider_id = provider_id
+        self.model_name = model_name
+        self.mock_fallback = DeterministicMockAssessmentProvider()
+
+    def assess_incident(self, input_data: IncidentAssessmentInput) -> IncidentAssessmentResult:
+        from app.core.config import settings
+
+        # 1. Check if external inference endpoint is configured
+        if not (self.endpoint_url or "").strip():
+            # In development/test, fallback to deterministic mock for test suites
+            if settings.is_development_or_test() and getattr(settings, "AI_PROVIDER", "") == "mock":
+                return self.mock_fallback.assess_incident(input_data)
+
+            return build_unavailable_assessment_result(
+                provider_id=self.provider_id,
+                model_name=self.model_name,
+                reason="ENDPOINT_NOT_CONFIGURED",
+                explanation="External AI inference endpoint URL is not configured. Incident routed for human review."
+            )
+
+        # 2. Build payload for external inference service
+        payload = {
+            "complaint_id": input_data.complaint_id,
+            "category": input_data.category,
+            "title": input_data.title,
+            "description": input_data.description,
+            "evidence_id": input_data.evidence_id,
+            "evidence_name": input_data.evidence_name,
+        }
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        # 3. Call external inference endpoint with safe timeouts
+        import httpx
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                resp = client.post(self.endpoint_url, json=payload, headers=headers)
+                if resp.status_code != 200:
+                    return build_unavailable_assessment_result(
+                        provider_id=self.provider_id,
+                        model_name=self.model_name,
+                        reason="EXTERNAL_HTTP_ERROR",
+                        explanation=f"External AI inference returned status {resp.status_code}. Incident routed for human review.",
+                        metadata={"http_status": resp.status_code}
+                    )
+                data = resp.json()
+
+            # Parse genuine external inference response
+            confidence = data.get("confidence_score")
+            detected_category = data.get("detected_category")
+            category_match = data.get("category_match")
+            evidence_suitable = data.get("evidence_suitable", True)
+            explanation = data.get("explanation", f"External model verified defect as {detected_category}.")
+            limitations = data.get("limitations", "External inference analysis.")
+            review_required = data.get("review_required", confidence is None or float(confidence) <= 0.90)
+
+            return IncidentAssessmentResult(
+                provider_id=self.provider_id,
+                model_name=data.get("model_name", self.model_name),
+                confidence_score=float(confidence) if confidence is not None else None,
+                detected_category=detected_category,
+                category_match=category_match,
+                evidence_suitable=evidence_suitable,
+                explanation=explanation,
+                limitations=limitations,
+                is_simulation=False,
+                review_required=review_required,
+                assessment_metadata=data.get("metadata", {})
+            )
+        except httpx.TimeoutException:
+            return build_unavailable_assessment_result(
+                provider_id=self.provider_id,
+                model_name=self.model_name,
+                reason="TIMEOUT",
+                explanation=f"External AI inference timed out after {self.timeout_seconds}s. Incident routed for human review.",
+                metadata={"timeout_seconds": self.timeout_seconds}
+            )
+        except Exception as exc:
+            return build_unavailable_assessment_result(
+                provider_id=self.provider_id,
+                model_name=self.model_name,
+                reason="CONNECTION_ERROR",
+                explanation="Failed to connect to external AI inference service. Incident routed for human review.",
+                metadata={"error_type": type(exc).__name__}
+            )
 
 
 def get_default_assessment_provider() -> IncidentAssessmentProvider:
-    """Returns the offline CLIP provider if weights are present and not in test mode, otherwise deterministic mock."""
-    if os.environ.get("TESTING"):
-        return DeterministicMockAssessmentProvider()
-    try:
-        from app.core.config import settings
-        if getattr(settings, "AI_PROVIDER", "clip") == "mock":
-            return DeterministicMockAssessmentProvider()
-    except Exception:
-        pass
+    """
+    Returns the appropriate assessment provider based on environment and configuration.
+    Guarantees truthful AI behavior: in production, never returns simulated confidence scores as real analysis.
+    """
+    from app.core.config import settings
 
+    # In testing or development mock mode
+    if os.environ.get("TESTING") or (settings.is_development_or_test() and getattr(settings, "AI_PROVIDER", "") == "mock"):
+        return DeterministicMockAssessmentProvider()
+
+    ai_provider = (getattr(settings, "AI_PROVIDER", "clip") or "clip").lower()
+
+    if ai_provider in ("external", "http", "api"):
+        return ExternalInferenceProvider()
+
+    # Default provider: clip
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     wpath = os.path.join(backend_dir, "models", "clip", "vit_b_32_laion2b.pt")
     if os.path.exists(wpath):
         return ClipIncidentAssessmentProvider(weights_path=wpath)
-    return DeterministicMockAssessmentProvider()
+
+    # Weights not present:
+    # If external inference URL is configured, use external inference
+    if (getattr(settings, "AI_INFERENCE_URL", "") or "").strip():
+        return ExternalInferenceProvider()
+
+    # If in development or testing: allow deterministic mock for demo/tests
+    if settings.is_development_or_test():
+        return DeterministicMockAssessmentProvider()
+
+    # In production without weights or external URL: fail truthfully with explicit unassessed result
+    return ExternalInferenceProvider()
+
 
 
